@@ -1,14 +1,18 @@
 {
     "wing" : {
         "planform" : {
-            "type" : "elliptic",
+            "ytype" : "elliptic",
+            "xtype" : "tapered",
+            "type" : "file",
             "planform_type_notes" : [["elliptic: (requires aspect_ratio)"],
-                                     ["tapered: (requires aspect_ratio and taper_ratio)"]],
-            "aspect_ratio" : 8.0,
-            "taper_ratio" : 0.5
+                                    ["tapered: (requires aspect_ratio and taper_ratio)"],
+                                    ["file: (requires filename)"]],
+            "aspect_ratio" : 20.0,
+            "taper_ratio" : 0.8,
+            "filename" : "planform.txt"
     },
             "airfoil_lift_slope" : 6.283185307179590,
-            "nodes_per_semispan" : 50,
+            "nodes_per_semispan" : 100,
             "washout" : {
                 "distribution" : "linear",
                 "xdistribution" : "none",
@@ -16,11 +20,12 @@
                 "distribution_options" : [["none: no twist"],
                                         ["linear: linear twist distribution"],
                                         ["optimum: optimum twist distribution"]],
-                "amount[deg]" : 5.0,
-                "xamount[deg]": "optimum",
+                "xamount[deg]" : 5.0,
+                "amount[deg]": "optimum",
                 "amount_options" : [["value: real number in degrees"],
                                     ["optimum: requires CL_design"]],
-                "CL_design" : 0.8
+                "CL_design" : 0.5,
+                "B3" : -0.333333333333
     },
         "aileron" : {
             "begin[z/b]" : 0.22,
@@ -32,8 +37,12 @@
         }
     },
     "condition" : {
-        "alpha_root[deg]" : 5.0,
-        "aileron_deflection[deg]" : 5.0,
+        "xalpha_root[deg]" : 5.0,
+        "alpha_root[deg]" : "CL",
+        "aileron_deflection[deg]" : 2.0,
+        "alpha_options" : [["value: real number in degrees"],
+                        ["CL: requires CL"]],
+        "CL" : 0.8,
         "pbar" : "steady",
         "xpbar": 5.0,
         "pbar_notes" : "value or ’steady’"
@@ -41,7 +50,9 @@
     "view" : {
         "planform" : true,
         "washout_distribution" : true,
-        "aileron_distribution" : true
+        "aileron_distribution" : true,
+        "CL_hat_distributions" : true,
+        "CL_tilde_distributions" : true
         }
     }
     
