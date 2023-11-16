@@ -97,6 +97,11 @@ if __name__ == "__main__":
     if wing.wing_type == "file":
         
         chord_dist_array = np.interp(z_b_array[::-1], txt_vals[:,0][::-1], txt_vals[:,1][::-1]) # in reverse because the np.interp function requires going smallest to biggest on the x value side of things.
+        
+        for i in range(len(chord_dist_array)):
+            if abs(chord_dist_array[i]) <= 0.0001:
+                chord_dist_array[i] = 0.001
+        
         average_txt_chord = abs(np.trapz(txt_vals[:,1], txt_vals[:,0]))
 
         Ra = 1/average_txt_chord
@@ -104,18 +109,23 @@ if __name__ == "__main__":
 
         # print("chord_dist:\n", chord_dist_array, "\n")
         # print("len chord_dist:\n", len(chord_dist_array), "\n")
-        # print("Ra:\n", Ra, "\n")
+        print("Ra:\n", Ra, "\n")
         
     else:
+        Ra = wing.aspect_ratio
         chord_dist_array = np.zeros((wing.N_nodes))
         for i in range(0, wing.N_nodes):
             if wing.wing_type == "elliptic":
                 chord_dist_array[i] = ((4*1)/(np.pi*wing.aspect_ratio))*np.sin(theta_array[i])
+                if chord_dist_array[i] <= 0.0001:
+                    chord_dist_array[i] = 0.001
             elif wing.wing_type == "tapered":
                 chord_dist_array[i] = (2*1/(wing.aspect_ratio*(1 + wing.taper_ratio)))*(1-((1-wing.taper_ratio)*abs(np.cos(theta_array[i]))))
+        
         # print("chord_distribution")
         # print(chord_dist_array)
         # print("\n")
+        print("Ra:\n", Ra, "\n")
 
     # now we have the requisite information to fill up the C_matrix 
     C_matrix = np.zeros((wing.N_nodes, wing.N_nodes))
@@ -173,20 +183,20 @@ if __name__ == "__main__":
     print("e_s:\n", e_s, "\n")
 
     #### now, calculate the washout distribution. 
-    if wing.is_washout_distribution:
-        washout_distribution = np.zeros((wing.N_nodes))
-        if wing.washout_distribution == "optimum":
-            for i in range(0, wing.N_nodes):
-                if (i == 0 or i == wing.N_nodes) and (wing.wing_type == "elliptic"):
-                    washout_distribution[i] = 0.0
-                else:
-                    washout_distribution[i] = 1 - ((np.sin(theta_array[i]))/((chord_dist_array[i])/chord_dist_array[len(chord_dist_array) // 2])) # eq 6.31 in eng handbook
-        elif wing.washout_distribution == "linear":
-            for i in range(0, wing.N_nodes):
-                washout_distribution[i] = abs(np.cos(theta_array[i])) # eq 6.30 in eng handbook
-        elif wing.washout_distribution == "none":
-            for i in range(0, wing.N_nodes):
+    
+    washout_distribution = np.zeros((wing.N_nodes))
+    if wing.washout_distribution == "optimum":
+        for i in range(0, wing.N_nodes):
+            if (i == 0 or i == wing.N_nodes) and (wing.wing_type == "elliptic"):
                 washout_distribution[i] = 0.0
+            else:
+                washout_distribution[i] = 1 - ((np.sin(theta_array[i]))/((chord_dist_array[i])/chord_dist_array[len(chord_dist_array) // 2])) # eq 6.31 in eng handbook
+    elif wing.washout_distribution == "linear":
+        for i in range(0, wing.N_nodes):
+            washout_distribution[i] = abs(np.cos(theta_array[i])) # eq 6.30 in eng handbook
+    elif wing.washout_distribution == "none":
+        for i in range(0, wing.N_nodes):
+            washout_distribution[i] = 0.0
             
     # print("\nwashout_distribution")
     # print(washout_distribution)
@@ -203,19 +213,21 @@ if __name__ == "__main__":
 
     #### now, calculate kappa_DL (same equations for elliptic and tapered)
     kappa_DL = 0.0
-    for i in range(1, len(a_vector)):
-        kappa_DL = kappa_DL + (i+1)*(a_vector[i]/a_vector[0])*((b_vector[i]/b_vector[0])-(a_vector[i]/a_vector[0])) # equation 1.8.30 mech of flight
-    kappa_DL = 2*(b_vector[0]/a_vector[0])*kappa_DL
-    print("kappa_DL:")
-    print(kappa_DL,"\n")
+    if wing.washout_distribution != "none":
+        for i in range(1, len(a_vector)):
+            kappa_DL = kappa_DL + (i+1)*(a_vector[i]/a_vector[0])*((b_vector[i]/b_vector[0])-(a_vector[i]/a_vector[0])) # equation 1.8.30 mech of flight
+        kappa_DL = 2*(b_vector[0]/a_vector[0])*kappa_DL
+        print("kappa_DL:")
+        print(kappa_DL,"\n")
 
     #### now, calculate kappa_DOmega (same equations for elliptic and tapered)
     kappa_DOmega = 0.0
-    for i in range(1, len(a_vector)):
-        kappa_DOmega = kappa_DOmega + (i+1)*(((b_vector[i]/b_vector[0])-(a_vector[i]/a_vector[0]))**2) # equation 1.8.31 mech of flight
-    kappa_DOmega = ((b_vector[0]/a_vector[0])**2)*kappa_DOmega
-    print("kappa_DOmega:")
-    print(kappa_DOmega,"\n")
+    if wing.washout_distribution != "none":
+        for i in range(1, len(a_vector)):
+            kappa_DOmega = kappa_DOmega + (i+1)*(((b_vector[i]/b_vector[0])-(a_vector[i]/a_vector[0]))**2) # equation 1.8.31 mech of flight
+        kappa_DOmega = ((b_vector[0]/a_vector[0])**2)*kappa_DOmega
+        print("kappa_DOmega:")
+        print(kappa_DOmega,"\n")
 
     #### now, re-evaluate kappa_D so it works for elliptic as well as tapered (with twist). 
     kappa_D = 0.0
@@ -236,13 +248,14 @@ if __name__ == "__main__":
     if wing.Omega == "optimum" and wing.wing_type == "elliptic":
         Omega = 0.0
         print("Elliptic Optimum Omega\n", np.degrees(Omega))
-    elif wing.Omega == "optimum" and wing.wing_type == "tapered":
+    elif wing.Omega == "optimum" and wing.wing_type == "tapered" and wing.washout_distribution != "none":
         Omega = (kappa_DL*wing.CL_design)/(2*kappa_DOmega*C_L_alpha)
         print("\nOptimum Omega:", np.degrees(Omega),"\n")
-    elif wing.Omega == "optimum" and wing.wing_type == "file":
+    elif wing.Omega == "optimum" and wing.wing_type == "file" and wing.washout_distribution != "none":
         Omega = (kappa_DL*wing.CL_design)/(2*kappa_DOmega*C_L_alpha) #### maybe change this
         print("\n optimum Omega:", np.degrees(Omega),"\n")
-
+    elif wing.Omega == "optimum" and wing.wing_type == "file" and wing.washout_distribution == "none":
+        Omega = 0.0
 
     ### now calculate the aileron distribution using straight line hinges.
     aileron_dist_array = np.zeros((wing.N_nodes))
@@ -407,7 +420,7 @@ if __name__ == "__main__":
         sums_roll = 0.0
 
         for j in range(0, len(theta_array)):
-            sums_plan = sums_plan + a_vector[j]*np.sin((j+1)*theta_array[i])
+            sums_plan = sums_plan + a_vector[j]*np.sin((j+1)*theta_array[i]) #### debug this for when there's no twist
             sums_washout = sums_washout + b_vector[j]*np.sin((j+1)*theta_array[i])
             sums_ail = sums_ail + c_vector[j]*np.sin((j+1)*theta_array[i])
             sums_roll = sums_roll + d_vector[j]*np.sin((j+1)*theta_array[i])
@@ -496,10 +509,11 @@ if __name__ == "__main__":
     if wing.is_planform:
 
         # plot the nodes along the lifting line.
-        plt.plot([z_b_array[0], z_b_array[0]], [leading_edge_array[0], trailing_edge_array[0]], label = "Nodes", color = 'red')
+        plt.plot([z_b_array[0], z_b_array[0]], [leading_edge_array[0], trailing_edge_array[0]], label = "Nodes", color = 'Blue')
         for i in range(1, len(z_b_array)):
-            plt.plot([z_b_array[i], z_b_array[i]], [leading_edge_array[i], trailing_edge_array[i]], color = 'red')
+            plt.plot([z_b_array[i], z_b_array[i]], [leading_edge_array[i], trailing_edge_array[i]], color = 'Blue')
 
+                
         if wing.wing_type == "tapered":
             # Indices for the first, middle, and last values
             indices_to_plot = [0, len(z_b_array) // 2, len(z_b_array) - 1]
@@ -532,20 +546,40 @@ if __name__ == "__main__":
             plt.plot([z_b_array[len(z_b_array)-1], z_b_array[len(z_b_array)-1]], [0.25*chord_dist_array[len(chord_dist_array)-1], -0.75*chord_dist_array[len(chord_dist_array)-1]], color='black')
             # plt.plot([z_b_array[0], z_b_array[0]], [0.25*chord_dist_array[0], -0.75*chord_dist_array[0]])
 
-
         # plot the quarter chord (lifting line)
         plt.plot(chord_x, chord_y, label = "Lifting Line", color = "black")
-
         
         # plot the spanwise part of the ailerons on the planform itself. 
         plt.plot([aileron_zb_positions[0], aileron_zb_positions[1]], [cfb_array[0], cfb_array[1]], label = "Ailerons", color = "black")
         plt.plot([aileron_zb_positions[2], aileron_zb_positions[3]], [cfb_array[2], cfb_array[3]], color = "black")
 
+        counter = 0.0
+        for i in range(len(z_b_array)):
+            if (z_b_array[i] <= aileron_zb_positions[0] and z_b_array[i] >= aileron_zb_positions[1]) or (z_b_array[i] <= aileron_zb_positions[2] and z_b_array[i] >= aileron_zb_positions[3]):
+                counter += 1
+        
+        aileron_zb_first = np.array([aileron_zb_positions[0], aileron_zb_positions[1]])
+        cfb_first = np.array([cfb_array[0], cfb_array[1]])
+
+        aileron_zb_second = np.array([aileron_zb_positions[2], aileron_zb_positions[3]])
+        cfb_second = np.array([cfb_array[2], cfb_array[3]])
+
+        # Now, for each z_b_array value, interpolate the corresponding y value
+        print(aileron_zb_positions)
+        for i in range(0, len(z_b_array)):
+            if z_b_array[i] <= aileron_zb_positions[0] and z_b_array[i] >= aileron_zb_positions[1]:
+                # Interpolate y value based on the line between cfb[0] and cfb[1]
+                y_interpolated = np.interp(z_b_array[i], aileron_zb_first[::-1], cfb_first[::-1])
+                plt.plot([z_b_array[i], z_b_array[i]], [y_interpolated, trailing_edge_array[i]], color='red')
+            elif z_b_array[i] <= aileron_zb_positions[2] and z_b_array[i] >= aileron_zb_positions[3]:
+                # Interpolate y value based on the line between cfb[2] and cfb[3]
+                y_interpolated = np.interp(z_b_array[i], aileron_zb_second[::-1], cfb_second[::-1])
+                plt.plot([z_b_array[i], z_b_array[i]], [y_interpolated, trailing_edge_array[i]], color='red')
+        
         # now, plot the lines down to the trailing edge chord distribution to complete the ailerons
         for i in range(len(aileron_zb_positions)):
             plt.plot([aileron_zb_positions[i], aileron_zb_positions[i]], [cfb_array[i], -0.75*aileron_c_over_b[i]], color = "black")
 
-        # Add labels and a legend (optional)
         plt.xlabel('z/b')
         plt.ylabel('C/b')
         plt.title('Planform')
@@ -561,7 +595,7 @@ if __name__ == "__main__":
         plt.title('Washout Distribution')
         plt.xlabel('z/b')
         plt.ylabel('Omega')
-        plt.gca().set_aspect('equal') # making the plotting axis scales equal to eachother. 
+        # plt.gca().set_aspect('equal') # making the plotting axis scales equal to eachother. 
     
     if wing.is_aileron_distribution:
         plt.figure()
@@ -595,8 +629,6 @@ if __name__ == "__main__":
         plt.plot(z_b_array[::-1], CL_tilde_aileron, label = "Aileron", color = "Red") #### ask Ben why this is inverted. 
         plt.plot(z_b_array[::-1], CL_tilde_roll, label = "Roll Rate", color = "purple")  
         plt.plot(z_b_array[::-1], CL_tilde_total, label = "Total", color = "black") 
-
-
 
     plt.show()
 
